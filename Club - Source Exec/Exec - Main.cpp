@@ -44,33 +44,36 @@ std::vector<uint8_t> encrypt(const std::string& plaintext, const std::string& ke
         throw std::runtime_error("Failed to create EVP cipher context.");
     }
 
-    if (key.length() < EVP_MIN_KEY_LENGTH) {
+    if (key.length() < EVP_CIPHER_key_length(EVP_aes_256_cbc())) {
+        EVP_CIPHER_CTX_free(ctx);
         throw std::invalid_argument("Key length too short.");
     }
 
-    int len;
     std::vector<uint8_t> ciphertext(EVP_CIPHER_block_size(EVP_aes_256_cbc()) + plaintext.length());
 
     // Initialize the cipher context
-    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, (uint8_t*)key.c_str(), nullptr) != 1) {
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, (const uint8_t*)key.c_str(), nullptr) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         throw std::runtime_error("Failed to initialize EVP cipher context.");
     }
 
+    int len;
     // Perform the encryption
-    if (EVP_EncryptUpdate(ctx, &ciphertext[0], &len, (const uint8_t*)plaintext.c_str(), plaintext.length()) != 1) {
+    if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len, (const uint8_t*)plaintext.c_str(), plaintext.length()) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         throw std::runtime_error("Failed to perform encryption.");
     }
 
     int final_len;
-    if (EVP_EncryptFinal_ex(ctx, &ciphertext[len], &final_len) != 1) {
+    // Finalize the encryption
+    if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &final_len) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         throw std::runtime_error("Failed to finalize encryption.");
     }
 
     EVP_CIPHER_CTX_free(ctx);
 
+    // Resize the ciphertext to the actual size
     ciphertext.resize(len + final_len);
     return ciphertext;
 }
